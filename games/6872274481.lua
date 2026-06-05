@@ -2220,345 +2220,153 @@ end
 	end)
 		
 	local Fly
-local LongJump
-run(function()
-	local Options = {TPTiming = tick()}
-	local Mode
-	local FloatMode
-	local State
-	local MoveMethod
-	local Keys
-	local VerticalValue
-	local BounceLength
-	local BounceDelay
-	local FloatTPGround
-	local FloatTPAir
-	local CustomProperties
-	local WallCheck
-	local PlatformStanding
-	local Platform, YLevel, OldYLevel
-	local w, s, a, d, up, down = 0, 0, 0, 0, 0, 0
-	local rayCheck = RaycastParams.new()
-	rayCheck.RespectCanCollide = true
-	Options.rayCheck = rayCheck
+	local LongJump
+	run(function()
+		local Value
+		local VerticalValue
+		local WallCheck
+		local PopBalloons
+		local TP
+		local rayCheck = RaycastParams.new()
+		rayCheck.RespectCanCollide = true
+		local up, down, old = 0, 0
 
-	local Functions
-	Functions = {
-		Velocity = function()
-			entitylib.character.RootPart.Velocity = (entitylib.character.RootPart.Velocity * Vector3.new(1, 0, 1)) + Vector3.new(0, 2.25 + ((up + down) * VerticalValue.Value), 0)
-		end,
-		Impulse = function(options, moveDirection)
-			local root = entitylib.character.RootPart
-			local diff = (Vector3.new(0, 2.25 + ((up + down) * VerticalValue.Value), 0) - root.AssemblyLinearVelocity) * Vector3.new(0, 1, 0)
-			if diff.Magnitude > 2 then
-				root:ApplyImpulse(diff * root.AssemblyMass)
-			end
-		end,
-		CFrame = function(dt)
-			local root = entitylib.character.RootPart
-			if not YLevel then
-				YLevel = root.Position.Y
-			end
-			YLevel = YLevel + ((up + down) * VerticalValue.Value * dt)
-			if WallCheck.Enabled then
-				rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
-				rayCheck.CollisionGroup = root.CollisionGroup
-				local ray = workspace:Raycast(root.Position, Vector3.new(0, YLevel - root.Position.Y, 0), rayCheck)
-				if ray then
-					YLevel = ray.Position.Y + entitylib.character.HipHeight
-				end
-			end
-			root.Velocity *= Vector3.new(1, 0, 1)
-			root.CFrame += Vector3.new(0, YLevel - root.Position.Y, 0)
-		end,
-		Bounce = function()
-			Functions.Velocity()
-			entitylib.character.RootPart.Velocity += Vector3.new(0, ((tick() % BounceDelay.Value) / BounceDelay.Value > 0.5 and 1 or -1) * BounceLength.Value, 0)
-		end,
-		Floor = function()
-			Platform.CFrame = down ~= 0 and CFrame.identity or entitylib.character.RootPart.CFrame + Vector3.new(0, -(entitylib.character.HipHeight + 0.5), 0)
-		end,
-		TP = function(dt)
-			Functions.CFrame(dt)
-			if tick() % (FloatTPAir.Value + FloatTPGround.Value) > FloatTPAir.Value then
-				OldYLevel = OldYLevel or YLevel
-				rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
-				rayCheck.CollisionGroup = entitylib.character.RootPart.CollisionGroup
-				local ray = workspace:Raycast(entitylib.character.RootPart.Position, Vector3.new(0, -1000, 0), rayCheck)
-				if ray then
-					YLevel = ray.Position.Y + entitylib.character.HipHeight
-				end
-			else
-				if OldYLevel then
-					YLevel = OldYLevel
-					OldYLevel = nil
-				end
-			end
-		end,
-		Jump = function(dt)
-			local root = entitylib.character.RootPart
-			if not YLevel then
-				YLevel = root.Position.Y
-			end
-			YLevel = YLevel + ((up + down) * VerticalValue.Value * dt)
-			if root.Position.Y < YLevel then
-				entitylib.character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-			end
-		end
-	}
+		Fly = vape.Categories.Blatant:CreateModule({
+			Name = 'Fly',
+			Function = function(callback)
+				frictionTable.Fly = callback or nil
+				updateVelocity()
+				if callback then
+					up, down, old = 0, 0, bedwars.BalloonController.deflateBalloon
+					bedwars.BalloonController.deflateBalloon = function() end
+					local tpTick, tpToggle, oldy = tick(), true
 
-	Fly = vape.Categories.Blatant:CreateModule({
-		Name = 'Fly',
-		Function = function(callback)
-			if Platform then
-				Platform.Parent = callback and gameCamera or nil
-			end
-			frictionTable.Fly = callback and CustomProperties.Enabled or nil
-			updateVelocity()
-			if callback then
-				Fly:Clean(runService.PreSimulation:Connect(function(dt)
-					if entitylib.isAlive then
-						if PlatformStanding.Enabled then
-							entitylib.character.Humanoid.PlatformStand = true
-							entitylib.character.RootPart.RotVelocity = Vector3.zero
-							entitylib.character.RootPart.CFrame = CFrame.lookAlong(entitylib.character.RootPart.CFrame.Position, gameCamera.CFrame.LookVector)
-						end
-						if State.Value ~= 'None' then
-							entitylib.character.Humanoid:ChangeState(Enum.HumanoidStateType[State.Value])
-						end
-						SpeedMethods[Mode.Value](Options, TargetStrafeVector or MoveMethod.Value == 'Direct' and calculateMoveVector(Vector3.new(a + d, 0, w + s)) or entitylib.character.Humanoid.MoveDirection, dt)
-						Functions[FloatMode.Value](dt)
-					else
-						YLevel = nil
-						OldYLevel = nil
+					if lplr.Character and (lplr.Character:GetAttribute('InflatedBalloons') or 0) == 0 and getItem('balloon') then
+						bedwars.BalloonController:inflateBalloon()
 					end
-				end))
+					Fly:Clean(vapeEvents.AttributeChanged.Event:Connect(function(changed)
+						if changed == 'InflatedBalloons' and (lplr.Character:GetAttribute('InflatedBalloons') or 0) == 0 and getItem('balloon') then
+							bedwars.BalloonController:inflateBalloon()
+						end
+					end))
+					Fly:Clean(runService.PreSimulation:Connect(function(dt)
+						if entitylib.isAlive and not InfiniteFly.Enabled and isnetworkowner(entitylib.character.RootPart) then
+							local flyAllowed = (lplr.Character:GetAttribute('InflatedBalloons') and lplr.Character:GetAttribute('InflatedBalloons') > 0) or store.matchState == 2
+							local mass = (1.5 + (flyAllowed and 6 or 0) * (tick() % 0.4 < 0.2 and -1 or 1)) + ((up + down) * VerticalValue.Value)
+							local root, moveDirection = entitylib.character.RootPart, entitylib.character.Humanoid.MoveDirection
+							local velo = getSpeed()
+							local destination = (moveDirection * math.max(Value.Value - velo, 0) * dt)
+							rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera, AntiFallPart}
+							rayCheck.CollisionGroup = root.CollisionGroup
 
-				w, s, a, d = inputService:IsKeyDown(Enum.KeyCode.W) and -1 or 0, inputService:IsKeyDown(Enum.KeyCode.S) and 1 or 0, inputService:IsKeyDown(Enum.KeyCode.A) and -1 or 0, inputService:IsKeyDown(Enum.KeyCode.D) and 1 or 0
-				up, down = 0, 0
-				for _, v in {'InputBegan', 'InputEnded'} do
-					Fly:Clean(inputService[v]:Connect(function(input)
+							if WallCheck.Enabled then
+								local ray = workspace:Raycast(root.Position, destination, rayCheck)
+								if ray then
+									destination = ((ray.Position + ray.Normal) - root.Position)
+								end
+							end
+
+							if not flyAllowed then
+								if tpToggle then
+									local airleft = (tick() - entitylib.character.AirTime)
+									if airleft > 2 then
+										if not oldy then
+											local ray = workspace:Raycast(root.Position, Vector3.new(0, -1000, 0), rayCheck)
+											if ray and TP.Enabled then
+												tpToggle = false
+												oldy = root.Position.Y
+												tpTick = tick() + 0.11
+												root.CFrame = CFrame.lookAlong(Vector3.new(root.Position.X, ray.Position.Y + entitylib.character.HipHeight, root.Position.Z), root.CFrame.LookVector)
+											end
+										end
+									end
+								else
+									if oldy then
+										if tpTick < tick() then
+											local newpos = Vector3.new(root.Position.X, oldy, root.Position.Z)
+											root.CFrame = CFrame.lookAlong(newpos, root.CFrame.LookVector)
+											tpToggle = true
+											oldy = nil
+										else
+											mass = 0
+										end
+									end
+								end
+							end
+
+							root.CFrame += destination
+							root.AssemblyLinearVelocity = (moveDirection * velo) + Vector3.new(0, mass, 0)
+						end
+					end))
+					Fly:Clean(inputService.InputBegan:Connect(function(input)
 						if not inputService:GetFocusedTextBox() then
-							local divided = Keys.Value:split('/')
-							if input.KeyCode == Enum.KeyCode.W then
-								w = v == 'InputBegan' and -1 or 0
-							elseif input.KeyCode == Enum.KeyCode.S then
-								s = v == 'InputBegan' and 1 or 0
-							elseif input.KeyCode == Enum.KeyCode.A then
-								a = v == 'InputBegan' and -1 or 0
-							elseif input.KeyCode == Enum.KeyCode.D then
-								d = v == 'InputBegan' and 1 or 0
-							elseif input.KeyCode == Enum.KeyCode[divided[1]] then
-								up = v == 'InputBegan' and 1 or 0
-							elseif input.KeyCode == Enum.KeyCode[divided[2]] then
-								down = v == 'InputBegan' and -1 or 0
+							if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+								up = 1
+							elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.ButtonL2 then
+								down = -1
 							end
 						end
 					end))
+					Fly:Clean(inputService.InputEnded:Connect(function(input)
+						if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+							up = 0
+						elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.ButtonL2 then
+							down = 0
+						end
+					end))
+					if inputService.TouchEnabled then
+						pcall(function()
+							local jumpButton = lplr.PlayerGui.TouchGui.TouchControlFrame.JumpButton
+							Fly:Clean(jumpButton:GetPropertyChangedSignal('ImageRectOffset'):Connect(function()
+								up = jumpButton.ImageRectOffset.X == 146 and 1 or 0
+							end))
+						end)
+					end
+				else
+					bedwars.BalloonController.deflateBalloon = old
+					if PopBalloons.Enabled and entitylib.isAlive and (lplr.Character:GetAttribute('InflatedBalloons') or 0) > 0 then
+						for _ = 1, 3 do
+							bedwars.BalloonController:deflateBalloon()
+						end
+					end
 				end
-				if inputService.TouchEnabled then
-					pcall(function()
-						local jumpButton = lplr.PlayerGui.TouchGui.TouchControlFrame.JumpButton
-						Fly:Clean(jumpButton:GetPropertyChangedSignal('ImageRectOffset'):Connect(function()
-							up = jumpButton.ImageRectOffset.X == 146 and 1 or 0
-						end))
-					end)
-				end
-			else
-				YLevel, OldYLevel = nil, nil
-				if entitylib.isAlive and PlatformStanding.Enabled then
-					entitylib.character.Humanoid.PlatformStand = false
-				end
+			end,
+			ExtraText = function()
+				return 'Heatseeker'
+			end,
+			Tooltip = 'Makes you go zoom.'
+		})
+		Value = Fly:CreateSlider({
+			Name = 'Speed',
+			Min = 1,
+			Max = 23,
+			Default = 23,
+			Suffix = function(val)
+				return val == 1 and 'stud' or 'studs'
 			end
-		end,
-		ExtraText = function()
-			return Mode.Value
-		end,
-		Tooltip = 'Makes you go zoom.'
-	})
-	Mode = Fly:CreateDropdown({
-		Name = 'Speed Mode',
-		List = SpeedMethodList,
-		Function = function(val)
-			WallCheck.Object.Visible = FloatMode.Value == 'CFrame' or FloatMode.Value == 'TP' or val == 'CFrame' or val == 'TP'
-			Options.TPFrequency.Object.Visible = val == 'TP'
-			Options.PulseLength.Object.Visible = val == 'Pulse'
-			Options.PulseDelay.Object.Visible = val == 'Pulse'
-			if Fly.Enabled then
-				Fly:Toggle()
-				Fly:Toggle()
+		})
+		VerticalValue = Fly:CreateSlider({
+			Name = 'Vertical Speed',
+			Min = 1,
+			Max = 150,
+			Default = 50,
+			Suffix = function(val)
+				return val == 1 and 'stud' or 'studs'
 			end
-		end,
-		Tooltip = 'Velocity - Uses smooth physics based movement\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position of the root\nTP - Large teleports within intervals\nPulse - Controllable bursts of speed\nWalkSpeed - The classic mode of speed, usually detected on most games.'
-	})
-	FloatMode = Fly:CreateDropdown({
-		Name = 'Float Mode',
-		List = {'Velocity', 'Impulse', 'CFrame', 'Bounce', 'Floor', 'Jump', 'TP'},
-		Function = function(val)
-			WallCheck.Object.Visible = Mode.Value == 'CFrame' or Mode.Value == 'TP' or val == 'CFrame' or val == 'TP'
-			BounceLength.Object.Visible = val == 'Bounce'
-			BounceDelay.Object.Visible = val == 'Bounce'
-			VerticalValue.Object.Visible = val ~= 'Floor'
-			FloatTPGround.Object.Visible = val == 'TP'
-			FloatTPAir.Object.Visible = val == 'TP'
-			if Platform then
-				Platform:Destroy()
-				Platform = nil
-			end
-			if val == 'Floor' then
-				Platform = Instance.new('Part')
-				Platform.CanQuery = false
-				Platform.Anchored = true
-				Platform.Size = Vector3.one
-				Platform.Transparency = 1
-				Platform.Parent = Fly.Enabled and gameCamera or nil
-			end
-		end,
-		Tooltip = 'Velocity - Uses smooth physics based movement\nImpulse - Same as velocity while using forces instead\nCFrame - Directly adjusts the position of the root\nTP - Teleports you to the ground within intervals\nFloor - Spawns a part under you\nJump - Presses space after going below a certain Y Level\nBounce - Vertical bouncing motion'
-	})
-	local states = {'None'}
-	for _, v in Enum.HumanoidStateType:GetEnumItems() do
-		if v.Name ~= 'Dead' and v.Name ~= 'None' then
-			table.insert(states, v.Name)
-		end
-	end
-	State = Fly:CreateDropdown({
-		Name = 'Humanoid State',
-		List = states
-	})
-	MoveMethod = Fly:CreateDropdown({
-		Name = 'Move Mode',
-		List = {'MoveDirection', 'Direct'},
-		Tooltip = 'MoveDirection - Uses the games input vector for movement\nDirect - Directly calculate our own input vector'
-	})
-	Keys = Fly:CreateDropdown({
-		Name = 'Keys',
-		List = {'Space/LeftControl', 'Space/LeftShift', 'E/Q', 'Space/Q', 'ButtonA/ButtonL2'},
-		Tooltip = 'The key combination for going up & down'
-	})
-	Options.Value = Fly:CreateSlider({
-		Name = 'Speed',
-		Min = 1,
-		Max = 150,
-		Default = 50,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	VerticalValue = Fly:CreateSlider({
-		Name = 'Vertical Speed',
-		Min = 1,
-		Max = 150,
-		Default = 50,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	Options.TPFrequency = Fly:CreateSlider({
-		Name = 'TP Frequency',
-		Min = 0,
-		Max = 1,
-		Decimal = 100,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	Options.PulseLength = Fly:CreateSlider({
-		Name = 'Pulse Length',
-		Min = 0,
-		Max = 1,
-		Decimal = 100,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	Options.PulseDelay = Fly:CreateSlider({
-		Name = 'Pulse Delay',
-		Min = 0,
-		Max = 1,
-		Decimal = 100,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	BounceLength = Fly:CreateSlider({
-		Name = 'Bounce Length',
-		Min = 0,
-		Max = 30,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'stud' or 'studs'
-		end
-	})
-	BounceDelay = Fly:CreateSlider({
-		Name = 'Bounce Delay',
-		Min = 0,
-		Max = 1,
-		Decimal = 100,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	FloatTPGround = Fly:CreateSlider({
-		Name = 'Ground',
-		Min = 0,
-		Max = 1,
-		Decimal = 10,
-		Default = 0.1,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	FloatTPAir = Fly:CreateSlider({
-		Name = 'Air',
-		Min = 0,
-		Max = 5,
-		Decimal = 10,
-		Default = 2,
-		Darker = true,
-		Visible = false,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	WallCheck = Fly:CreateToggle({
-		Name = 'Wall Check',
-		Default = true,
-		Darker = true,
-		Visible = false
-	})
-	Options.WallCheck = WallCheck
-	PlatformStanding = Fly:CreateToggle({
-		Name = 'PlatformStand',
-		Function = function(callback)
-			if Fly.Enabled then
-				entitylib.character.Humanoid.PlatformStand = callback
-			end
-		end,
-		Tooltip = 'Forces the character to look infront of the camera'
-	})
-	CustomProperties = Fly:CreateToggle({
-		Name = 'Custom Properties',
-		Function = function()
-			if Fly.Enabled then
-				Fly:Toggle()
-				Fly:Toggle()
-			end
-		end,
-		Default = true
-	})
-end) get JUST THE PULSE type of fly and make a script for it
+		})
+		WallCheck = Fly:CreateToggle({
+			Name = 'Wall Check',
+			Default = true
+		})
+		PopBalloons = Fly:CreateToggle({
+			Name = 'Pop Balloons',
+			Default = true
+		})
+		TP = Fly:CreateToggle({
+			Name = 'TP Down',
+			Default = true
+		})
+	end)
 		
 	run(function()
 		local Mode
@@ -10739,7 +10547,186 @@ run(function()
     			setup5v5(DraftApp)
     			setupSquad(DraftApp)
 			else
-				local app = lplr.PlayerGui:WaitForChild('MatchDraftApp', 9e9)
+				local app = local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Ensure the script executes within the Vape environment
+local vape = shared.vape or _G.vape
+if not vape then return end
+
+local lplr = Players.LocalPlayer
+
+-- Module Implementation
+local CustomModule = vape.Categories.Render:CreateModule({
+    Name = 'KitRender',
+    Function = function(callback)
+        if callback then
+            -- 1. Configuration
+            local CHECK_RADIUS = 14
+            local ORBIT_RADIUS = 2.5 
+            local ORBIT_SPEED = 4
+            local ORB_COLOR = Color3.fromRGB(0, 255, 0) -- Pure Neon Green
+
+            local activeEffects = {}
+
+            -- 2. Function to create the 100% NEON effect
+            local function createEffect(char)
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if not root then return nil end
+
+                local orbs = {}
+                local tilts = {
+                    CFrame.Angles(math.rad(45), 0, math.rad(45)),  
+                    CFrame.Angles(math.rad(-45), 0, math.rad(-45)), 
+                    CFrame.Angles(0, 0, 0)                         
+                }
+
+                for i = 1, 3 do
+                    -- The Physical Ball (Invisible Core)
+                    local orb = Instance.new("Part")
+                    orb.Shape = Enum.PartType.Ball
+                    orb.Size = Vector3.new(0.4, 0.4, 0.4)
+                    orb.Transparency = 1 
+                    orb.CanCollide = false
+                    orb.Anchored = true
+                    orb.Parent = char
+
+                    local att = Instance.new("Attachment", orb)
+                    
+                    -- The Neon Glow Particles
+                    local emitter = Instance.new("ParticleEmitter", att)
+                    emitter.Texture = "rbxassetid://284205403" 
+                    emitter.Color = ColorSequence.new(ORB_COLOR)
+                    emitter.Transparency = NumberSequence.new(0.1) 
+                    
+                    emitter.Size = NumberSequence.new({
+                        NumberSequenceKeypoint.new(0, 0.6), 
+                        NumberSequenceKeypoint.new(1, 0.1)
+                    })
+                    
+                    emitter.Lifetime = NumberRange.new(0.2) 
+                    emitter.Rate = 200 
+                    emitter.Speed = NumberRange.new(0)
+                    
+                    -- Pure Neon Magic
+                    emitter.LightEmission = 1  
+                    emitter.LightInfluence = 0 
+                    emitter.ZOffset = 1
+
+                    table.insert(orbs, {
+                        part = orb, 
+                        tilt = tilts[i], 
+                        offset = (math.pi * 2 / 3) * i
+                    })
+                end
+                return orbs
+            end
+
+            -- 3. Cleanup function
+            local function removeEffect(playerUserId)
+                if activeEffects[playerUserId] then
+                    for _, orbData in ipairs(activeEffects[playerUserId]) do
+                        if orbData.part then orbData.part:Destroy() end
+                    end
+                    activeEffects[playerUserId] = nil
+                end
+            end
+
+            -- 4. Distance Checking Loop
+            _G.KitRenderLoop = task.spawn(function()
+                while task.wait(0.5) do
+                    local myChar = lplr.Character
+                    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    if not myRoot then continue end
+
+                    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+                        local otherChar = otherPlayer.Character
+                        local otherRoot = otherChar and otherChar:FindFirstChild("HumanoidRootPart")
+                        
+                        if otherRoot and otherPlayer ~= lplr then
+                            local distance = (myRoot.Position - otherRoot.Position).Magnitude
+                            if distance <= CHECK_RADIUS then
+                                if not activeEffects[otherPlayer.UserId] then
+                                    activeEffects[otherPlayer.UserId] = createEffect(otherChar)
+                                end
+                            else
+                                removeEffect(otherPlayer.UserId)
+                            end
+                        elseif otherPlayer ~= lplr then
+                            removeEffect(otherPlayer.UserId)
+                        end
+                    end
+                end
+            end)
+
+            -- 5. The Animation Loop
+            _G.KitRenderHeartbeat = RunService.Heartbeat:Connect(function()
+                local timeNow = os.clock()
+
+                for userId, orbs in pairs(activeEffects) do
+                    local player = Players:GetPlayerByUserId(userId)
+                    local char = player and player.Character
+                    local root = char and char:FindFirstChild("HumanoidRootPart")
+
+                    if root then
+                        local center = root.Position + Vector3.new(0, 0.5, 0)
+                        for _, orbData in ipairs(orbs) do
+                            local angle = (timeNow * ORBIT_SPEED) + orbData.offset
+                            local x = math.cos(angle) * ORBIT_RADIUS
+                            local z = math.sin(angle) * ORBIT_RADIUS
+                            
+                            local rotatedPos = orbData.tilt * Vector3.new(x, 0, z)
+                            orbData.part.Position = center + rotatedPos
+                        end
+                    else
+                        removeEffect(userId)
+                    end
+                end
+            end)
+
+            -- Handle UI-specific logic if MatchDraftApp is required
+            task.spawn(function()
+                local DraftApp = lplr.PlayerGui:WaitForChild('MatchDraftApp', 5)
+                if DraftApp then
+                    if type(setup5v5) == "function" then setup5v5(DraftApp) end
+                    if type(setupSquad) == "function" then setupSquad(DraftApp) end
+                end
+            end)
+            
+            -- Store effects references globally for disabling cleanup later
+            _G.KitRenderEffects = activeEffects
+
+        else
+            -- Clean up everything when the module is turned OFF
+            if _G.KitRenderLoop then 
+                task.cancel(_G.KitRenderLoop) 
+                _G.KitRenderLoop = nil
+            end
+            if _G.KitRenderHeartbeat then 
+                _G.KitRenderHeartbeat:Disconnect() 
+                _G.KitRenderHeartbeat = nil
+            end
+            if _G.KitRenderEffects then
+                for userId, _ in pairs(_G.KitRenderEffects) do
+                    if activeEffects then
+                        for _, orbData in ipairs(_G.KitRenderEffects[userId] or {}) do
+                            if orbData.part then orbData.part:Destroy() end
+                        end
+                    end
+                end
+                _G.KitRenderEffects = nil
+            end
+
+            -- Run removal code for UI if function exists
+            local app = lplr.PlayerGui:FindFirstChild('MatchDraftApp')
+            if app and type(removeeverything) == "function" then
+                removeeverything(app)
+            end
+        end
+    end,
+    Tooltip = 'Allows you to see the other opponent kits and rings nearby players with neon orbs.'
+})
+lplr.PlayerGui:WaitForChild('MatchDraftApp', 9e9)
 				removeeverything(app)
     		end
     	end,
