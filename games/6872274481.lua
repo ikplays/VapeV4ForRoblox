@@ -10556,80 +10556,166 @@ run(function()
 end)
 
 run(function()
-    local HeatseekerFly = vape.Categories.Blatant:CreateModule({
-        Name = "HeatseekerFly",
-        Function = function(call)
-            if call then
+    local PulseFly = vape.Categories.Blatant:CreateModule({
+        Name = "Pulse Fly",
+        Function = function(callback)
+            if callback then
                 -- Start flying
                 local lplr = game.Players.LocalPlayer
-                local bodyvelo = nil
-                local flying = true
-                local currentSpeed = 28
-                local pulsingUp = false
-                local pulseSpeed = 0.5
+                local userInputService = game:GetService("UserInputService")
+                local runService = game:GetService("RunService")
                 
-                -- Pulse function
-                local function getPulseSpeed()
-                    if pulsingUp then
-                        currentSpeed = currentSpeed + (pulseSpeed * 0.1)
-                        if currentSpeed >= 28 then
-                            currentSpeed = 28
-                            pulsingUp = false
-                        end
-                    else
-                        currentSpeed = currentSpeed - (pulseSpeed * 0.1)
-                        if currentSpeed <= 22.5 then
-                            currentSpeed = 22.5
-                            pulsingUp = true
-                        end
-                    end
-                    return currentSpeed
+                local flying = true
+                local pulseStartTime = tick()
+                local isPulsing = true
+                local currentSpeed = 0
+                
+                -- Settings
+                local pulseLength = PulseFly.pulseLength and PulseFly.pulseLength.Value or 0.3
+                local pulseDelay = PulseFly.pulseDelay and PulseFly.pulseDelay.Value or 0.2
+                local maxSpeed = PulseFly.maxSpeed and PulseFly.maxSpeed.Value or 80
+                local normalSpeed = PulseFly.normalSpeed and PulseFly.normalSpeed.Value or 30
+                local verticalSpeed = PulseFly.verticalSpeed and PulseFly.verticalSpeed.Value or 30
+                
+                -- Movement keys
+                local w, s, a, d = 0, 0, 0, 0
+                local up = false
+                local bodyVelocity = nil
+                
+                local function updateKeys()
+                    w = userInputService:IsKeyDown(Enum.KeyCode.W) and -1 or 0
+                    s = userInputService:IsKeyDown(Enum.KeyCode.S) and 1 or 0
+                    a = userInputService:IsKeyDown(Enum.KeyCode.A) and -1 or 0
+                    d = userInputService:IsKeyDown(Enum.KeyCode.D) and 1 or 0
+                    up = userInputService:IsKeyDown(Enum.KeyCode.Space)
                 end
                 
-                -- Fly connection
-                local connection
-                connection = game:GetService("RunService").RenderStepped:Connect(function(delta)
-                    if not flying then 
-                        if connection then connection:Disconnect() end
-                        return 
+                local function getMoveDirection()
+                    local move = Vector3.new(a + d, 0, w + s)
+                    if move.Magnitude > 0 then
+                        return move.Unit
                     end
+                    return Vector3.new(0, 0, 0)
+                end
+                
+                updateKeys()
+                
+                -- Input connections
+                local function onInput()
+                    updateKeys()
+                end
+                
+                PulseFly:Clean(userInputService.InputBegan:Connect(onInput))
+                PulseFly:Clean(userInputService.InputEnded:Connect(onInput))
+                
+                -- Main pulse loop
+                PulseFly:Clean(runService.RenderStepped:Connect(function(delta)
+                    if not flying then return end
                     
                     if lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart") then
                         local hrp = lplr.Character.HumanoidRootPart
                         
-                        if not bodyvelo or bodyvelo.Parent ~= hrp then
-                            if bodyvelo then bodyvelo:Destroy() end
-                            bodyvelo = Instance.new("BodyVelocity")
-                            bodyvelo.Parent = hrp
-                            bodyvelo.MaxForce = Vector3.new(100000, 100000, 100000)
+                        if not bodyVelocity or bodyVelocity.Parent ~= hrp then
+                            if bodyVelocity then bodyVelocity:Destroy() end
+                            bodyVelocity = Instance.new("BodyVelocity")
+                            bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+                            bodyVelocity.Parent = hrp
                         end
                         
-                        local moveDir = lplr.Character.Humanoid.MoveDirection
-                        local pulseSpeedValue = getPulseSpeed()
-                        bodyvelo.Velocity = moveDir * pulseSpeedValue
+                        -- Pulse logic
+                        local elapsed = tick() - pulseStartTime
+                        local pulseCycle = pulseLength + pulseDelay
+                        
+                        if elapsed % pulseCycle < pulseLength then
+                            -- Pulse active
+                            if not isPulsing then
+                                isPulsing = true
+                                currentSpeed = maxSpeed
+                            end
+                        else
+                            -- Between pulses
+                            if isPulsing then
+                                isPulsing = false
+                                currentSpeed = normalSpeed
+                            end
+                        end
+                        
+                        -- Apply movement
+                        local moveDir = getMoveDirection()
+                        local vertical = up and verticalSpeed or 0
+                        bodyVelocity.Velocity = (moveDir * currentSpeed) + Vector3.new(0, vertical, 0)
                     end
-                end)
+                end))
                 
                 -- Store for cleanup
-                HeatseekerFly.connections = {connection}
-                HeatseekerFly.bodyvelo = bodyvelo
-                HeatseekerFly.flying = true
+                PulseFly.bodyVelocity = bodyVelocity
                 
             else
                 -- Stop flying
-                if HeatseekerFly.bodyvelo then
-                    HeatseekerFly.bodyvelo:Destroy()
-                    HeatseekerFly.bodyvelo = nil
+                if PulseFly.bodyVelocity then
+                    PulseFly.bodyVelocity:Destroy()
+                    PulseFly.bodyVelocity = nil
                 end
-                if HeatseekerFly.connections then
-                    for _, conn in pairs(HeatseekerFly.connections) do
-                        conn:Disconnect()
-                    end
-                    HeatseekerFly.connections = {}
-                end
-                HeatseekerFly.flying = false
             end
         end,
-        Tooltip = "Pulsing fly that alternates between 28 and 22.5 speed to bypass anticheat"
+        Tooltip = "Pulse fly - Bursts of speed with controllable intervals"
+    })
+    
+    -- Create settings for Pulse Fly
+    PulseFly.pulseLength = PulseFly:CreateSlider({
+        Name = "Pulse Length",
+        Min = 0.1,
+        Max = 1,
+        Decimal = 100,
+        Default = 0.3,
+        Suffix = function(val)
+            return val == 1 and "second" or "seconds"
+        end,
+        Tooltip = "How long each speed pulse lasts"
+    })
+    
+    PulseFly.pulseDelay = PulseFly:CreateSlider({
+        Name = "Pulse Delay",
+        Min = 0.1,
+        Max = 1,
+        Decimal = 100,
+        Default = 0.2,
+        Suffix = function(val)
+            return val == 1 and "second" or "seconds"
+        end,
+        Tooltip = "Delay between pulses"
+    })
+    
+    PulseFly.maxSpeed = PulseFly:CreateSlider({
+        Name = "Max Speed",
+        Min = 10,
+        Max = 150,
+        Default = 80,
+        Suffix = function(val)
+            return val == 1 and "stud" or "studs"
+        end,
+        Tooltip = "Speed during pulse"
+    })
+    
+    PulseFly.normalSpeed = PulseFly:CreateSlider({
+        Name = "Normal Speed",
+        Min = 10,
+        Max = 100,
+        Default = 30,
+        Suffix = function(val)
+            return val == 1 and "stud" or "studs"
+        end,
+        Tooltip = "Speed between pulses"
+    })
+    
+    PulseFly.verticalSpeed = PulseFly:CreateSlider({
+        Name = "Vertical Speed",
+        Min = 10,
+        Max = 100,
+        Default = 30,
+        Suffix = function(val)
+            return val == 1 and "stud" or "studs"
+        end,
+        Tooltip = "Upward speed when holding Space"
     })
 end)
