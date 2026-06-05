@@ -10554,3 +10554,82 @@ run(function()
     	Tooltip = 'Allows you to see the other opponent kits'
     })
 end)
+
+run(function()
+    local HeatseekerFly = vape.Categories.Blatant:CreateModule({
+        Name = "HeatseekerFly",
+        Function = function(call)
+            if call then
+                -- Start flying
+                local lplr = game.Players.LocalPlayer
+                local bodyvelo = nil
+                local flying = true
+                local currentSpeed = 28
+                local pulsingUp = false
+                local pulseSpeed = 0.5
+                
+                -- Pulse function
+                local function getPulseSpeed()
+                    if pulsingUp then
+                        currentSpeed = currentSpeed + (pulseSpeed * 0.1)
+                        if currentSpeed >= 28 then
+                            currentSpeed = 28
+                            pulsingUp = false
+                        end
+                    else
+                        currentSpeed = currentSpeed - (pulseSpeed * 0.1)
+                        if currentSpeed <= 22.5 then
+                            currentSpeed = 22.5
+                            pulsingUp = true
+                        end
+                    end
+                    return currentSpeed
+                end
+                
+                -- Fly connection
+                local connection
+                connection = game:GetService("RunService").RenderStepped:Connect(function(delta)
+                    if not flying then 
+                        if connection then connection:Disconnect() end
+                        return 
+                    end
+                    
+                    if lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = lplr.Character.HumanoidRootPart
+                        
+                        if not bodyvelo or bodyvelo.Parent ~= hrp then
+                            if bodyvelo then bodyvelo:Destroy() end
+                            bodyvelo = Instance.new("BodyVelocity")
+                            bodyvelo.Parent = hrp
+                            bodyvelo.MaxForce = Vector3.new(100000, 100000, 100000)
+                        end
+                        
+                        local moveDir = lplr.Character.Humanoid.MoveDirection
+                        local pulseSpeedValue = getPulseSpeed()
+                        bodyvelo.Velocity = moveDir * pulseSpeedValue
+                    end
+                end)
+                
+                -- Store for cleanup
+                HeatseekerFly.connections = {connection}
+                HeatseekerFly.bodyvelo = bodyvelo
+                HeatseekerFly.flying = true
+                
+            else
+                -- Stop flying
+                if HeatseekerFly.bodyvelo then
+                    HeatseekerFly.bodyvelo:Destroy()
+                    HeatseekerFly.bodyvelo = nil
+                end
+                if HeatseekerFly.connections then
+                    for _, conn in pairs(HeatseekerFly.connections) do
+                        conn:Disconnect()
+                    end
+                    HeatseekerFly.connections = {}
+                end
+                HeatseekerFly.flying = false
+            end
+        end,
+        Tooltip = "Pulsing fly that alternates between 28 and 22.5 speed to bypass anticheat"
+    })
+end)
