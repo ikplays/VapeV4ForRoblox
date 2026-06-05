@@ -10547,186 +10547,7 @@ run(function()
     			setup5v5(DraftApp)
     			setupSquad(DraftApp)
 			else
-				local app = local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-
--- Ensure the script executes within the Vape environment
-local vape = shared.vape or _G.vape
-if not vape then return end
-
-local lplr = Players.LocalPlayer
-
--- Module Implementation
-local CustomModule = vape.Categories.Render:CreateModule({
-    Name = 'KitRender',
-    Function = function(callback)
-        if callback then
-            -- 1. Configuration
-            local CHECK_RADIUS = 14
-            local ORBIT_RADIUS = 2.5 
-            local ORBIT_SPEED = 4
-            local ORB_COLOR = Color3.fromRGB(0, 255, 0) -- Pure Neon Green
-
-            local activeEffects = {}
-
-            -- 2. Function to create the 100% NEON effect
-            local function createEffect(char)
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if not root then return nil end
-
-                local orbs = {}
-                local tilts = {
-                    CFrame.Angles(math.rad(45), 0, math.rad(45)),  
-                    CFrame.Angles(math.rad(-45), 0, math.rad(-45)), 
-                    CFrame.Angles(0, 0, 0)                         
-                }
-
-                for i = 1, 3 do
-                    -- The Physical Ball (Invisible Core)
-                    local orb = Instance.new("Part")
-                    orb.Shape = Enum.PartType.Ball
-                    orb.Size = Vector3.new(0.4, 0.4, 0.4)
-                    orb.Transparency = 1 
-                    orb.CanCollide = false
-                    orb.Anchored = true
-                    orb.Parent = char
-
-                    local att = Instance.new("Attachment", orb)
-                    
-                    -- The Neon Glow Particles
-                    local emitter = Instance.new("ParticleEmitter", att)
-                    emitter.Texture = "rbxassetid://284205403" 
-                    emitter.Color = ColorSequence.new(ORB_COLOR)
-                    emitter.Transparency = NumberSequence.new(0.1) 
-                    
-                    emitter.Size = NumberSequence.new({
-                        NumberSequenceKeypoint.new(0, 0.6), 
-                        NumberSequenceKeypoint.new(1, 0.1)
-                    })
-                    
-                    emitter.Lifetime = NumberRange.new(0.2) 
-                    emitter.Rate = 200 
-                    emitter.Speed = NumberRange.new(0)
-                    
-                    -- Pure Neon Magic
-                    emitter.LightEmission = 1  
-                    emitter.LightInfluence = 0 
-                    emitter.ZOffset = 1
-
-                    table.insert(orbs, {
-                        part = orb, 
-                        tilt = tilts[i], 
-                        offset = (math.pi * 2 / 3) * i
-                    })
-                end
-                return orbs
-            end
-
-            -- 3. Cleanup function
-            local function removeEffect(playerUserId)
-                if activeEffects[playerUserId] then
-                    for _, orbData in ipairs(activeEffects[playerUserId]) do
-                        if orbData.part then orbData.part:Destroy() end
-                    end
-                    activeEffects[playerUserId] = nil
-                end
-            end
-
-            -- 4. Distance Checking Loop
-            _G.KitRenderLoop = task.spawn(function()
-                while task.wait(0.5) do
-                    local myChar = lplr.Character
-                    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                    if not myRoot then continue end
-
-                    for _, otherPlayer in ipairs(Players:GetPlayers()) do
-                        local otherChar = otherPlayer.Character
-                        local otherRoot = otherChar and otherChar:FindFirstChild("HumanoidRootPart")
-                        
-                        if otherRoot and otherPlayer ~= lplr then
-                            local distance = (myRoot.Position - otherRoot.Position).Magnitude
-                            if distance <= CHECK_RADIUS then
-                                if not activeEffects[otherPlayer.UserId] then
-                                    activeEffects[otherPlayer.UserId] = createEffect(otherChar)
-                                end
-                            else
-                                removeEffect(otherPlayer.UserId)
-                            end
-                        elseif otherPlayer ~= lplr then
-                            removeEffect(otherPlayer.UserId)
-                        end
-                    end
-                end
-            end)
-
-            -- 5. The Animation Loop
-            _G.KitRenderHeartbeat = RunService.Heartbeat:Connect(function()
-                local timeNow = os.clock()
-
-                for userId, orbs in pairs(activeEffects) do
-                    local player = Players:GetPlayerByUserId(userId)
-                    local char = player and player.Character
-                    local root = char and char:FindFirstChild("HumanoidRootPart")
-
-                    if root then
-                        local center = root.Position + Vector3.new(0, 0.5, 0)
-                        for _, orbData in ipairs(orbs) do
-                            local angle = (timeNow * ORBIT_SPEED) + orbData.offset
-                            local x = math.cos(angle) * ORBIT_RADIUS
-                            local z = math.sin(angle) * ORBIT_RADIUS
-                            
-                            local rotatedPos = orbData.tilt * Vector3.new(x, 0, z)
-                            orbData.part.Position = center + rotatedPos
-                        end
-                    else
-                        removeEffect(userId)
-                    end
-                end
-            end)
-
-            -- Handle UI-specific logic if MatchDraftApp is required
-            task.spawn(function()
-                local DraftApp = lplr.PlayerGui:WaitForChild('MatchDraftApp', 5)
-                if DraftApp then
-                    if type(setup5v5) == "function" then setup5v5(DraftApp) end
-                    if type(setupSquad) == "function" then setupSquad(DraftApp) end
-                end
-            end)
-            
-            -- Store effects references globally for disabling cleanup later
-            _G.KitRenderEffects = activeEffects
-
-        else
-            -- Clean up everything when the module is turned OFF
-            if _G.KitRenderLoop then 
-                task.cancel(_G.KitRenderLoop) 
-                _G.KitRenderLoop = nil
-            end
-            if _G.KitRenderHeartbeat then 
-                _G.KitRenderHeartbeat:Disconnect() 
-                _G.KitRenderHeartbeat = nil
-            end
-            if _G.KitRenderEffects then
-                for userId, _ in pairs(_G.KitRenderEffects) do
-                    if activeEffects then
-                        for _, orbData in ipairs(_G.KitRenderEffects[userId] or {}) do
-                            if orbData.part then orbData.part:Destroy() end
-                        end
-                    end
-                end
-                _G.KitRenderEffects = nil
-            end
-
-            -- Run removal code for UI if function exists
-            local app = lplr.PlayerGui:FindFirstChild('MatchDraftApp')
-            if app and type(removeeverything) == "function" then
-                removeeverything(app)
-            end
-        end
-    end,
-    Tooltip = 'Allows you to see the other opponent kits and rings nearby players with neon orbs.'
-})
-lplr.PlayerGui:WaitForChild('MatchDraftApp', 9e9)
+				local app = lplr.PlayerGui:WaitForChild('MatchDraftApp', 9e9)
 				removeeverything(app)
     		end
     	end,
@@ -10734,3 +10555,185 @@ lplr.PlayerGui:WaitForChild('MatchDraftApp', 9e9)
     })
 end)
 
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+-- Configuration & State Variables
+local localPlayer = Players.LocalPlayer
+local CHECK_RADIUS = 14
+local CHECK_RADIUS_SQR = CHECK_RADIUS ^ 2
+local ORBIT_RADIUS = 2.5 
+local ORBIT_SPEED = 4
+local ORB_COLOR = Color3.fromRGB(0, 255, 0) -- Pure Neon Green
+
+local activeEffects = {}
+local distanceLoopThread = nil
+local heartbeatConnection = nil
+local playerRemovingConnection = nil
+
+-- Function to create the 100% NEON effect
+local function createEffect(char)
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return nil end
+
+	local orbs = {}
+	local tilts = {
+		CFrame.Angles(math.rad(45), 0, math.rad(45)),  
+		CFrame.Angles(math.rad(-45), 0, math.rad(-45)), 
+		CFrame.Angles(0, 0, 0)                         
+	}
+
+	for i = 1, 3 do
+		-- The Physical Ball (Invisible Core)
+		local orb = Instance.new("Part")
+		orb.Shape = Enum.PartType.Ball
+		orb.Size = Vector3.new(0.4, 0.4, 0.4)
+		orb.Transparency = 1 
+		orb.CanCollide = false
+		orb.CanQuery = false
+		orb.CanTouch = false
+		orb.Anchored = true
+
+		local att = Instance.new("Attachment")
+		att.Parent = orb
+		
+		-- The Neon Glow Particles
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Texture = "rbxassetid://284205403" 
+		emitter.Color = ColorSequence.new(ORB_COLOR)
+		emitter.Transparency = NumberSequence.new(0.1) 
+		emitter.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.6), 
+			NumberSequenceKeypoint.new(1, 0.1)
+		})
+		emitter.Lifetime = NumberRange.new(0.2) 
+		emitter.Rate = 200 
+		emitter.Speed = NumberRange.new(0)
+		emitter.LightEmission = 1  
+		emitter.LightInfluence = 0 
+		emitter.ZOffset = 1
+		emitter.Parent = att
+
+		-- Parent the orb last for optimization
+		orb.Parent = char
+
+		table.insert(orbs, {
+			part = orb, 
+			tilt = tilts[i], 
+			offset = (math.pi * 2 / 3) * i
+		})
+	end
+	return orbs
+end
+
+-- Cleanup function for specific players
+local function removeEffect(playerUserId)
+	if activeEffects[playerUserId] then
+		for _, orbData in ipairs(activeEffects[playerUserId]) do
+			if orbData.part then
+				orbData.part:Destroy()
+			end
+		end
+		activeEffects[playerUserId] = nil
+	end
+end
+
+-- Global cleanup function when module turns off
+local function cleanAllEffects()
+	for userId, _ in pairs(activeEffects) do
+		removeEffect(userId)
+	end
+	activeEffects = {}
+end
+
+-- Module Creation
+local BetterKATarget = vape.Categories.Render:CreateModule({
+	Name = 'BetterKATarget',
+	Tooltip = 'Gives nearby targets a neon orbiting effect',
+	Function = function(call)
+		if call then
+			-- START EFFECT
+			
+			-- 1. Handle player leaving to prevent memory leaks
+			playerRemovingConnection = Players.PlayerRemoving:Connect(function(player)
+				removeEffect(player.UserId)
+			end)
+
+			-- 2. Distance Checking Loop
+			distanceLoopThread = task.spawn(function()
+				while task.wait(0.5) do
+					local myChar = localPlayer.Character
+					local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+					if not myRoot then continue end
+
+					for _, otherPlayer in ipairs(Players:GetPlayers()) do
+						if otherPlayer == localPlayer then continue end
+						
+						local otherChar = otherPlayer.Character
+						local otherRoot = otherChar and otherChar:FindFirstChild("HumanoidRootPart")
+						
+						if otherRoot then
+							-- Fast squared distance check
+							local diff = myRoot.Position - otherRoot.Position
+							local distSqr = (diff.X^2 + diff.Y^2 + diff.Z^2)
+
+							if distSqr <= CHECK_RADIUS_SQR then
+								if not activeEffects[otherPlayer.UserId] then
+									activeEffects[otherPlayer.UserId] = createEffect(otherChar)
+								end
+							else
+								removeEffect(otherPlayer.UserId)
+							end
+						else
+							removeEffect(otherPlayer.UserId)
+						end
+					end
+				end
+			end)
+
+			-- 3. The Animation Loop
+			heartbeatConnection = RunService.Heartbeat:Connect(function()
+				local timeNow = os.clock()
+
+				for userId, orbs in pairs(activeEffects) do
+					local player = Players:GetPlayerByUserId(userId)
+					local char = player and player.Character
+					local root = char and char:FindFirstChild("HumanoidRootPart")
+
+					if root then
+						local center = root.Position + Vector3.new(0, 0.5, 0)
+						for _, orbData in ipairs(orbs) do
+							local angle = (timeNow * ORBIT_SPEED) + orbData.offset
+							local x = math.cos(angle) * ORBIT_RADIUS
+							local z = math.sin(angle) * ORBIT_RADIUS
+							
+							local rotatedPos = orbData.tilt * Vector3.new(x, 0, z)
+							orbData.part.Position = center + rotatedPos
+						end
+					else
+						removeEffect(userId)
+					end
+				end
+			end)
+		else
+			-- STOP EFFECT & CLEANUP
+			
+			-- Disconnect events and loops
+			if distanceLoopThread then 
+				task.cancel(distanceLoopThread) 
+				distanceLoopThread = nil
+			end
+			if heartbeatConnection then 
+				heartbeatConnection:Disconnect() 
+				heartbeatConnection = nil
+			end
+			if playerRemovingConnection then 
+				playerRemovingConnection:Disconnect() 
+				playerRemovingConnection = nil
+			end
+
+			-- Remove all active parts from characters
+			cleanAllEffects()
+		end
+	end
+})
