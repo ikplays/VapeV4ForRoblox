@@ -1,3 +1,4 @@
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
@@ -1154,6 +1155,7 @@ run(function()
 	local Projectile
 	local ProjectileSpeed
 	local ProjectileGravity
+	local TeamMode -- [NEW] Declaring the Team/FFA Toggle
 	local RaycastWhitelist = RaycastParams.new()
 	RaycastWhitelist.FilterType = Enum.RaycastFilterType.Include
 	local ProjectileRaycast = RaycastParams.new()
@@ -1164,6 +1166,26 @@ run(function()
 	local function getTarget(origin, obj)
 		if rand.NextNumber(rand, 0, 100) > (AutoFire.Enabled and 100 or HitChance.Value) then return end
 		local targetPart = (rand.NextNumber(rand, 0, 100) < (AutoFire.Enabled and 100 or HeadshotChance.Value)) and 'Head' or 'RootPart'
+		
+		-- [NEW] Temporarily override the target check to enforce Spectator and FFA rules
+		local oldTargetCheck = entitylib.targetCheck
+		entitylib.targetCheck = function(ent)
+			-- 1. Always ignore players on the Spectator team
+			if ent.Player and ent.Player.Team and (ent.Player.Team.Name == "Spectators" or ent.Player.Team.Name == "Spectator") then
+				return false
+			end
+			
+			-- 2. Team Mode logic
+			if TeamMode and TeamMode.Enabled then
+				if ent.Player and ent.Player.Team and lplr.Team and ent.Player.Team == lplr.Team then
+					return false -- Ignore teammates if Team Mode is ON
+				end
+			end
+			
+			-- 3. Fall back to the script's original target checks
+			return oldTargetCheck(ent)
+		end
+
 		local ent = entitylib['Entity'..Mode.Value]({
 			Range = Range.Value,
 			Wallcheck = Target.Walls.Enabled and (obj or true) or nil,
@@ -1172,6 +1194,9 @@ run(function()
 			Players = Target.Players.Enabled,
 			NPCs = Target.NPCs.Enabled
 		})
+
+		-- [NEW] Restore the original target check immediately so we don't break other modules
+		entitylib.targetCheck = oldTargetCheck
 
 		if ent then
 			targetinfo.Targets[ent] = tick() + 1
@@ -1285,6 +1310,7 @@ run(function()
 					if CircleObject then
 						CircleObject.Position = inputService:GetMouseLocation()
 					end
+
 					if AutoFire.Enabled then
 						local origin = AutoFireMode.Value == 'Camera' and gameCamera.CFrame or entitylib.isAlive and entitylib.character.RootPart.CFrame or CFrame.identity
 						local ent = entitylib['Entity'..Mode.Value]({
@@ -1315,6 +1341,7 @@ run(function()
 							end
 						end
 					end
+
 					task.wait()
 				until not SilentAim.Enabled
 			else
@@ -1512,7 +1539,15 @@ run(function()
 		Darker = true,
 		Visible = false
 	})
+	
+	-- [NEW] Creating the actual toggle in the UI
+	TeamMode = SilentAim:CreateToggle({
+		Name = 'Team Mode',
+		Tooltip = 'On: Ignores Teammates.\nOff: FFA Mode (Shoots everyone except Spectators).',
+		Default = false
+	})
 end)
+
 	
 run(function()
 	local TriggerBot
